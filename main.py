@@ -6,8 +6,8 @@ from openai import OpenAI
 
 app = FastAPI(title="Booking AI Assistant")
 
-# Ключ подтягивается из Render (LLM_API_KEY) или из фоллбека в коде
-API_KEY = os.getenv("LLM_API_KEY", "gsk_ТВОЙ_КЛЮЧ_ОТ_GROQ")
+# 👇 Твой ключ от Groq (начинается на gsk_...)
+API_KEY = os.getenv("LLM_API_KEY", "gsk_ВСТАВЬ_СВОЙ_КЛЮЧ_СЮДА")
 
 class ChatRequest(BaseModel):
     passport_received: bool
@@ -23,15 +23,15 @@ HTML_CONTENT = """
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; display: flex; justify-content: center; }
         .container { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 100%; max-width: 500px; }
-        h2 { margin-top: 0; color: #1a1a1a; font-size: 22px; }
+        h2 { margin-top: 0; color: #1a1a1a; }
         .form-group { margin-bottom: 16px; }
         label { display: block; margin-bottom: 6px; font-weight: 600; color: #4a5568; }
         select, textarea, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e0; box-sizing: border-box; font-size: 14px; }
-        textarea { height: 80px; resize: vertical; }
-        button { background: #0066ff; color: white; border: none; font-weight: 600; cursor: pointer; margin-top: 8px; font-size: 15px; }
+        textarea { height: 90px; resize: vertical; }
+        button { background: #0066ff; color: white; border: none; font-weight: 600; cursor: pointer; margin-top: 8px; }
         button:hover { background: #0052cc; }
         button:disabled { background: #a0aec0; }
-        .response-box { margin-top: 20px; padding: 14px; background: #f7fafc; border-left: 4px solid #0066ff; border-radius: 6px; display: none; white-space: pre-wrap; font-size: 14px; line-height: 1.5; color: #2d3748; }
+        .response-box { margin-top: 20px; padding: 14px; background: #f7fafc; border-left: 4px solid #0066ff; border-radius: 6px; display: none; white-space: pre-wrap; line-height: 1.5; }
     </style>
 </head>
 <body>
@@ -81,10 +81,10 @@ HTML_CONTENT = """
                     resBox.innerText = data.reply;
                     resBox.style.display = "block";
                 } else {
-                    alert("Ошибка сервера: " + (data.detail || "Неизвестная ошибка"));
+                    alert("Ошибка: " + (data.detail || "Неизвестная ошибка"));
                 }
             } catch (err) {
-                alert("Ошибка сети!");
+                alert("Ошибка соединения с сервером!");
             } finally {
                 btn.disabled = false;
                 btn.innerText = "Получить ответ ИИ";
@@ -101,24 +101,26 @@ def read_root():
 
 @app.post("/api/chat")
 def chat_with_ai(data: ChatRequest):
-    if not API_KEY or "ТВОЙ_КЛЮЧ" in API_KEY:
-        raise HTTPException(status_code=400, detail="Ключ LLM_API_KEY не установлен!")
+    if not API_KEY or "ВСТАВЬ_СВОЙ_КЛЮЧ" in API_KEY:
+        raise HTTPException(status_code=400, detail="Укажи реальный Groq API ключ в main.py!")
 
     system_prompt = f"""
-Ты — вежливый AI-ассистент сервиса бронирования жилья.
+Ты — внимательный и заботливый AI-ассистент сервиса бронирования жилья.
 Текущий статус документов гостя:
 - Паспорт получен: {"ДА" if data.passport_received else "НЕТ"}
 
-ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА (ОТВЕЧАЙ СТРОГО В 2–4 ПРЕДЛОЖЕНИЯ):
-1. Если статус "Паспорт получен: НЕТ":
-   - Ответь гостю, что сначала необходимо предоставить паспорт для заселения.
-   - Обязательно дай ссылку: https://example.com/passport
+ПРАВИЛА ОТВЕТА (ОБЯЗАТЕЛЬНО ОТ 3 ДО 5 ПРЕДЛОЖЕНИЙ):
+1. Если "Паспорт получен: НЕТ":
+   - Ответь на вопрос гостя и объясни, что сначала обязательно нужно предоставить паспорт для регистрации.
+   - Предоставь ссылку для загрузки: https://example.com/passport
+   - Дай практический совет (например, сделать чёткое фото разворота с качественным освещением без бликов).
 
-2. Если статус "Паспорт получен: ДА":
-   - Подтверди, что паспорт получен и принят.
-   - Сообщи, что следующим этапом будет оплата залога.
+2. Если "Паспорт получен: ДА":
+   - Подтверди, что паспорт принят и проверен.
+   - Сообщи, что следующим и финальным этапом будет оплата страхового залога.
+   - Дай полезный совет (например, проверить лимиты на карте для онлайн-оплаты или уточнить время приезда).
 
-Пиши грамотно и вежливо. Длина ответа — строго 2–4 предложения.
+Пиши грамотно, вежливо и естественно. Длина ответа строго 3–5 предложений.
 """
 
     try:
@@ -126,15 +128,17 @@ def chat_with_ai(data: ChatRequest):
             api_key=API_KEY,
             base_url="https://api.groq.com/openai/v1"
         )
+        
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": data.user_message}
             ],
-            temperature=0.3,
+            temperature=0.4,
             max_tokens=250
         )
         return {"reply": response.choices[0].message.content}
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
