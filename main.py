@@ -6,8 +6,8 @@ from openai import OpenAI
 
 app = FastAPI(title="Booking AI Assistant")
 
-# 👇👇👇 ВСТАВЬ СВОЙ КЛЮЧ ОТ GROQ ПРЯМО В ЭТИ КАВЫЧКИ 👇👇👇
-API_KEY = os.getenv("LLM_API_KEY", "")
+# Ключ подтягивается из Render (LLM_API_KEY) или из фоллбека в коде
+API_KEY = os.getenv("LLM_API_KEY", "gsk_ТВОЙ_КЛЮЧ_ОТ_GROQ")
 
 class ChatRequest(BaseModel):
     passport_received: bool
@@ -21,16 +21,17 @@ HTML_CONTENT = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Помощник Бронирования</title>
     <style>
-        body { font-family: system-ui, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; display: flex; justify-content: center; }
         .container { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 100%; max-width: 500px; }
-        h2 { margin-top: 0; color: #1a1a1a; }
+        h2 { margin-top: 0; color: #1a1a1a; font-size: 22px; }
         .form-group { margin-bottom: 16px; }
         label { display: block; margin-bottom: 6px; font-weight: 600; color: #4a5568; }
         select, textarea, button { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e0; box-sizing: border-box; font-size: 14px; }
         textarea { height: 80px; resize: vertical; }
-        button { background: #0066ff; color: white; border: none; font-weight: 600; cursor: pointer; margin-top: 8px; }
+        button { background: #0066ff; color: white; border: none; font-weight: 600; cursor: pointer; margin-top: 8px; font-size: 15px; }
+        button:hover { background: #0052cc; }
         button:disabled { background: #a0aec0; }
-        .response-box { margin-top: 20px; padding: 12px; background: #f7fafc; border-left: 4px solid #0066ff; border-radius: 4px; display: none; white-space: pre-wrap; }
+        .response-box { margin-top: 20px; padding: 14px; background: #f7fafc; border-left: 4px solid #0066ff; border-radius: 6px; display: none; white-space: pre-wrap; font-size: 14px; line-height: 1.5; color: #2d3748; }
     </style>
 </head>
 <body>
@@ -61,7 +62,7 @@ HTML_CONTENT = """
             const btn = document.getElementById('sendBtn');
             const resBox = document.getElementById('responseBox');
 
-            if (!message.trim()) return;
+            if (!message.trim()) return alert("Введите сообщение!");
 
             btn.disabled = true;
             btn.innerText = "ИИ думает...";
@@ -80,11 +81,10 @@ HTML_CONTENT = """
                     resBox.innerText = data.reply;
                     resBox.style.display = "block";
                 } else {
-                    // Теперь мы увидим НАСТОЯЩУЮ ошибку от Groq или Python
-                    alert("Ошибка сервера:\\n" + (data.detail || "Неизвестная ошибка"));
+                    alert("Ошибка сервера: " + (data.detail || "Неизвестная ошибка"));
                 }
             } catch (err) {
-                alert("Сетевая ошибка! Проверь, не отвалился ли сервер.");
+                alert("Ошибка сети!");
             } finally {
                 btn.disabled = false;
                 btn.innerText = "Получить ответ ИИ";
@@ -101,28 +101,25 @@ def read_root():
 
 @app.post("/api/chat")
 def chat_with_ai(data: ChatRequest):
-    if not API_KEY or "ТУТ_ТВОЙ_РЕАЛЬНЫЙ_КЛЮЧ" in API_KEY:
-        raise HTTPException(status_code=400, detail="Ключ не установлен в коде!")
+    if not API_KEY or "ТВОЙ_КЛЮЧ" in API_KEY:
+        raise HTTPException(status_code=400, detail="Ключ LLM_API_KEY не установлен!")
 
-    # Обновленный промпт — даем роль живого человека
     system_prompt = f"""
-Ты — лаконичный AI-ассистент бронирования.
-Статус паспорта: {"ПОЛУЧЕН" if data.passport_received else "НЕ ПОЛУЧЕН"}
+Ты — вежливый AI-ассистент сервиса бронирования жилья.
+Текущий статус документов гостя:
+- Паспорт получен: {"ДА" if data.passport_received else "НЕТ"}
 
-ПРАВИЛА (ОТВЕЧАЙ СТРОГО 2-4 ПРЕДЛОЖЕНИЯМИ, БЕЗ ВОДЫ):
-1. Если паспорт НЕ ПОЛУЧЕН: Объясни, что сначала нужен паспорт, и дай ссылку https://example.com/passport
-2. Если паспорт ПОЛУЧЕН: Сообщи, что паспорт принят, а следующий этап — оплата залога.
+ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА (ОТВЕЧАЙ СТРОГО В 2–4 ПРЕДЛОЖЕНИЯ):
+1. Если статус "Паспорт получен: НЕТ":
+   - Ответь гостю, что сначала необходимо предоставить паспорт для заселения.
+   - Обязательно дай ссылку: https://example.com/passport
+
+2. Если статус "Паспорт получен: ДА":
+   - Подтверди, что паспорт получен и принят.
+   - Сообщи, что следующим этапом будет оплата залога.
+
+Пиши грамотно и вежливо. Длина ответа — строго 2–4 предложения.
 """
-
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": data.user_message}
-        ],
-        temperature=0.2,
-        max_tokens=300  # Жесткий лимит на длину ответа
-    )
 
     try:
         client = OpenAI(
@@ -135,7 +132,8 @@ def chat_with_ai(data: ChatRequest):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": data.user_message}
             ],
-            temperature=0.5  # Чуть подняли для более живой речи
+            temperature=0.3,
+            max_tokens=250
         )
         return {"reply": response.choices[0].message.content}
     except Exception as e:
